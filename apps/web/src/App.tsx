@@ -20,6 +20,7 @@ export function App() {
   const [targetTranscript, setTargetTranscript] = useState("");
   const [sourceTranscript, setSourceTranscript] = useState("");
   const [error, setError] = useState("");
+  const [accessCode, setAccessCode] = useState(() => sessionStorage.getItem("translation_access_code") ?? "");
 
   const handleEvent = (event: TranslationEvent) => {
     if (event.type === "session.output_transcript.delta" && typeof event.delta === "string") {
@@ -32,13 +33,20 @@ export function App() {
   };
 
   const start = async () => {
+    if (!accessCode.trim()) {
+      setStatus("error");
+      setError("접속 코드를 입력하세요.");
+      return;
+    }
+
     setStatus("connecting");
     setError("");
     setTargetTranscript("");
     setSourceTranscript("");
 
     try {
-      const session = await startTranslationSession(handleEvent);
+      sessionStorage.setItem("translation_access_code", accessCode.trim());
+      const session = await startTranslationSession(accessCode.trim(), handleEvent);
       session.audioElement.muted = isMuted;
       sessionRef.current = session;
       setStatus("active");
@@ -100,6 +108,19 @@ export function App() {
           <div className="error-panel" role="alert">
             {error}
           </div>
+        ) : null}
+
+        {canStart ? (
+          <label className="access-code">
+            <span>접속 코드</span>
+            <input
+              type="password"
+              value={accessCode}
+              onChange={(event) => setAccessCode(event.target.value)}
+              placeholder="회사 내부 접속 코드"
+              autoComplete="current-password"
+            />
+          </label>
         ) : null}
 
         <footer className="controls">

@@ -17,19 +17,24 @@ type SessionResponse = {
   };
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8787";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
-const getClientSecret = async () => {
+const getClientSecret = async (accessCode: string) => {
   const response = await fetch(`${API_BASE_URL}/api/realtime/session`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-App-Access-Code": accessCode
+    },
     body: JSON.stringify({ sourceLanguage: "ja", targetLanguage: "ko" })
   });
 
-  const body = (await response.json().catch(() => null)) as SessionResponse | null;
+  const body = (await response.json().catch(() => null)) as
+    | (SessionResponse & { message?: string })
+    | null;
 
   if (!response.ok || !body) {
-    throw new Error("통역 세션을 만들지 못했습니다.");
+    throw new Error(body?.message ?? "통역 세션을 만들지 못했습니다.");
   }
 
   const clientSecret = body.value ?? body.client_secret?.value;
@@ -42,9 +47,10 @@ const getClientSecret = async () => {
 };
 
 export const startTranslationSession = async (
+  accessCode: string,
   onEvent: (event: TranslationEvent) => void
 ): Promise<TranslationSession> => {
-  const clientSecret = await getClientSecret();
+  const clientSecret = await getClientSecret(accessCode);
   const sourceStream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: true,

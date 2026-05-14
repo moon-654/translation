@@ -125,7 +125,8 @@ button {
 }
 
 .source-panel,
-.error-panel {
+.error-panel,
+.access-code {
   padding: 16px 18px;
   border-radius: 8px;
   font-size: 18px;
@@ -145,6 +146,29 @@ button {
   color: #8b1e25;
   background: #ffe4e6;
   border: 1px solid rgba(139, 30, 37, 0.18);
+}
+
+.access-code {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr);
+  gap: 14px;
+  align-items: center;
+  background: #f7f9f4;
+  border: 1px solid rgba(23, 33, 27, 0.12);
+  color: #26342c;
+  font-weight: 800;
+}
+
+.access-code input {
+  min-height: 48px;
+  width: 100%;
+  border: 1px solid rgba(23, 33, 27, 0.18);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #17211b;
+  background: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
 }
 
 .controls {
@@ -226,5 +250,9 @@ button {
   .danger-button,
   .secondary-button {
     flex: 1 1 160px;
+  }
+
+  .access-code {
+    grid-template-columns: 1fr;
   }
 }

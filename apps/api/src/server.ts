@@ -25,6 +25,38 @@ app.get("/api/config", (_req, res) => {
 });
 
 app.post("/api/realtime/session", async (req, res) => {
+  if (!config.appAccessCode) {
+    res.status(500).json({
+      error: "missing_app_access_code",
+      message: "APP_ACCESS_CODE is not configured on the API server."
+    });
+    return;
+  }
+
+  if (req.header("x-app-access-code") !== config.appAccessCode) {
+    res.status(401).json({
+      error: "invalid_access_code",
+      message: "접속 코드가 필요합니다."
+    });
+    return;
+  }
+
+  if (config.allowedClientIps) {
+    const clientIp = req.ip?.replace(/^::ffff:/, "") ?? "";
+    const allowed = config.allowedClientIps
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean);
+
+    if (!allowed.includes(clientIp)) {
+      res.status(403).json({
+        error: "ip_not_allowed",
+        message: "허용된 회사 네트워크에서만 사용할 수 있습니다."
+      });
+      return;
+    }
+  }
+
   const parsed = sessionRequestSchema.safeParse(req.body ?? {});
 
   if (!parsed.success) {
