@@ -184,6 +184,26 @@ button {
   transition: width 90ms linear;
 }
 
+.event-json {
+  display: block;
+  max-height: 88px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 8px;
+  color: #17211b;
+  background: rgba(255, 255, 255, 0.72);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.copy-diagnostics {
+  justify-self: start;
+  min-height: 42px;
+  font-size: 15px;
+}
+
 .setup-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;

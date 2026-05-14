@@ -24,6 +24,7 @@ export function App() {
   const [micLevel, setMicLevel] = useState(0);
   const [diagnostic, setDiagnostic] = useState("대기 중");
   const [lastEventType, setLastEventType] = useState("");
+  const [lastEventJson, setLastEventJson] = useState("");
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
   const [inputDeviceId, setInputDeviceId] = useState(() => localStorage.getItem("translation_input_device_id") ?? "");
@@ -53,6 +54,7 @@ export function App() {
 
   const handleEvent = (event: TranslationEvent) => {
     setLastEventType(event.type);
+    setLastEventJson(JSON.stringify(event).slice(0, 700));
     setEventLog((current) => [event.type, ...current.filter((type) => type !== event.type)].slice(0, 6));
 
     const payload = event as Record<string, unknown>;
@@ -84,6 +86,20 @@ export function App() {
     }
   };
 
+  const copyDiagnostics = async () => {
+    const content = [
+      `status=${status}`,
+      `diagnostic=${diagnostic}`,
+      `micLevel=${Math.round(micLevel * 100)}%`,
+      `lastEventType=${lastEventType || "none"}`,
+      `eventLog=${eventLog.join(" / ") || "none"}`,
+      `lastEventJson=${lastEventJson || "none"}`
+    ].join("\n");
+
+    await navigator.clipboard?.writeText(content).catch(() => undefined);
+    setDiagnostic("진단 정보 복사됨");
+  };
+
   const start = async () => {
     if (!accessCode.trim()) {
       setStatus("error");
@@ -96,6 +112,7 @@ export function App() {
     setTargetTranscript("");
     setSourceTranscript("");
     setLastEventType("");
+    setLastEventJson("");
     setEventLog([]);
     setMicLevel(0);
     setDiagnostic("연결 준비 중");
@@ -176,6 +193,13 @@ export function App() {
             <p>{diagnostic}</p>
             <p>{lastEventType ? `최근 이벤트: ${lastEventType}` : "이벤트 대기 중"}</p>
             {eventLog.length > 0 ? <p>이벤트 로그: {eventLog.join(" / ")}</p> : null}
+            {lastEventType === "output_audio_buffer.started" && !targetTranscript ? (
+              <p>번역 음성은 시작됐지만 자막 transcript 이벤트는 아직 수신되지 않았습니다.</p>
+            ) : null}
+            {lastEventJson ? <code className="event-json">{lastEventJson}</code> : null}
+            <button className="secondary-button copy-diagnostics" type="button" onClick={copyDiagnostics}>
+              진단 복사
+            </button>
           </section>
         ) : null}
 
