@@ -1,0 +1,5 @@
+name = "translation"
+pages_build_output_dir = "apps/web/dist"
+compatibility_date = "2026-05-14"
+
+[env.production]
