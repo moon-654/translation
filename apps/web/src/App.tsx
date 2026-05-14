@@ -21,14 +21,31 @@ export function App() {
   const [sourceTranscript, setSourceTranscript] = useState("");
   const [error, setError] = useState("");
   const [accessCode, setAccessCode] = useState(() => sessionStorage.getItem("translation_access_code") ?? "");
+  const [micLevel, setMicLevel] = useState(0);
+  const [diagnostic, setDiagnostic] = useState("대기 중");
+  const [lastEventType, setLastEventType] = useState("");
 
   const handleEvent = (event: TranslationEvent) => {
-    if (event.type === "session.output_transcript.delta" && typeof event.delta === "string") {
-      setTargetTranscript((current) => `${current}${event.delta}`);
+    setLastEventType(event.type);
+
+    const payload = event as Record<string, unknown>;
+    const delta =
+      typeof payload.delta === "string"
+        ? payload.delta
+        : typeof payload.transcript === "string"
+          ? payload.transcript
+          : "";
+
+    if (!delta) return;
+
+    const eventType = event.type.toLowerCase();
+
+    if (eventType.includes("output") || eventType.includes("translation") || eventType.includes("response")) {
+      setTargetTranscript((current) => `${current}${delta}`);
     }
 
-    if (event.type === "session.input_transcript.delta" && typeof event.delta === "string") {
-      setSourceTranscript((current) => `${current}${event.delta}`);
+    if (eventType.includes("input") || eventType.includes("source")) {
+      setSourceTranscript((current) => `${current}${delta}`);
     }
   };
 
@@ -43,10 +60,17 @@ export function App() {
     setError("");
     setTargetTranscript("");
     setSourceTranscript("");
+    setLastEventType("");
+    setMicLevel(0);
+    setDiagnostic("연결 준비 중");
 
     try {
       sessionStorage.setItem("translation_access_code", accessCode.trim());
-      const session = await startTranslationSession(accessCode.trim(), handleEvent);
+      const session = await startTranslationSession(accessCode.trim(), {
+        onEvent: handleEvent,
+        onDiagnostic: setDiagnostic,
+        onMicLevel: setMicLevel
+      });
       session.audioElement.muted = isMuted;
       sessionRef.current = session;
       setStatus("active");
@@ -55,12 +79,15 @@ export function App() {
       sessionRef.current = null;
       setStatus("error");
       setError(err instanceof Error ? err.message : "통역을 시작하지 못했습니다.");
+      setDiagnostic("오류");
     }
   };
 
   const stop = () => {
     sessionRef.current?.stop();
     sessionRef.current = null;
+    setMicLevel(0);
+    setDiagnostic("중지됨");
     setStatus("stopped");
   };
 
@@ -96,6 +123,19 @@ export function App() {
             {targetTranscript || (isActive ? "일본어 음성을 기다리는 중입니다." : "시작 버튼을 누르면 통역 자막이 표시됩니다.")}
           </div>
         </section>
+
+        {isActive ? (
+          <section className="diagnostics" aria-label="통역 연결 진단">
+            <div>
+              <span>마이크 입력</span>
+              <div className="level-meter" aria-hidden="true">
+                <div style={{ width: `${Math.round(micLevel * 100)}%` }} />
+              </div>
+            </div>
+            <p>{diagnostic}</p>
+            <p>{lastEventType ? `최근 이벤트: ${lastEventType}` : "이벤트 대기 중"}</p>
+          </section>
+        ) : null}
 
         {showSource ? (
           <section className="source-panel" aria-live="polite">

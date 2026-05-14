@@ -10,6 +10,12 @@ export type TranslationSession = {
   stop: () => void;
 };
 
+type TranslationSessionCallbacks = {
+  onEvent: (event: TranslationEvent) => void;
+  onDiagnostic?: (message: string) => void;
+  onMicLevel?: (level: number) => void;
+};
+
 type SessionResponse = {
   value?: string;
   client_secret?: {
@@ -81,9 +87,11 @@ const explainMicrophoneError = (error: unknown) => {
 
 export const startTranslationSession = async (
   accessCode: string,
-  onEvent: (event: TranslationEvent) => void
+  { onEvent, onDiagnostic, onMicLevel }: TranslationSessionCallbacks
 ): Promise<TranslationSession> => {
+  onDiagnostic?.("통역 세션 생성 중");
   const clientSecret = await getClientSecret(accessCode);
+  onDiagnostic?.("마이크 권한 확인 중");
   await ensureMicrophoneAvailable();
 
   let sourceStream: MediaStream;
@@ -100,19 +108,60 @@ export const startTranslationSession = async (
     throw new Error(explainMicrophoneError(error));
   }
 
+  onDiagnostic?.("마이크 입력 연결됨");
+  const audioContext = new AudioContext();
+  const sourceNode = audioContext.createMediaStreamSource(sourceStream);
+  const analyser = audioContext.createAnalyser();
+  analyser.fftSize = 512;
+  sourceNode.connect(analyser);
+
+  const samples = new Uint8Array(analyser.frequencyBinCount);
+  let isStopped = false;
+
+  const readMicLevel = () => {
+    if (isStopped) return;
+
+    analyser.getByteTimeDomainData(samples);
+    let peak = 0;
+
+    for (const sample of samples) {
+      peak = Math.max(peak, Math.abs(sample - 128));
+    }
+
+    onMicLevel?.(Math.min(1, peak / 64));
+    requestAnimationFrame(readMicLevel);
+  };
+
+  readMicLevel();
+
   const peerConnection = new RTCPeerConnection();
+  peerConnection.onconnectionstatechange = () => {
+    onDiagnostic?.(`WebRTC ${peerConnection.connectionState}`);
+  };
+  peerConnection.oniceconnectionstatechange = () => {
+    onDiagnostic?.(`ICE ${peerConnection.iceConnectionState}`);
+  };
+
   const sourceTrack = sourceStream.getAudioTracks()[0];
   peerConnection.addTrack(sourceTrack, sourceStream);
 
   const audioElement = new Audio();
   audioElement.autoplay = true;
   audioElement.setAttribute("playsinline", "true");
+  audioElement.style.display = "none";
+  document.body.appendChild(audioElement);
 
   peerConnection.ontrack = ({ streams }) => {
+    onDiagnostic?.("한국어 음성 트랙 수신 중");
     audioElement.srcObject = streams[0];
+    audioElement.play().catch(() => {
+      onDiagnostic?.("브라우저가 자동 재생을 막았습니다. 음소거 버튼을 한 번 눌렀다가 다시 시도하세요.");
+    });
   };
 
   const events = peerConnection.createDataChannel("oai-events");
+  events.onopen = () => onDiagnostic?.("Realtime 이벤트 채널 연결됨");
+  events.onerror = () => onDiagnostic?.("Realtime 이벤트 채널 오류");
   events.onmessage = ({ data }) => {
     try {
       onEvent(JSON.parse(data) as TranslationEvent);
@@ -123,6 +172,7 @@ export const startTranslationSession = async (
 
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
+  onDiagnostic?.("OpenAI WebRTC 연결 중");
 
   const sdpResponse = await fetch("https://api.openai.com/v1/realtime/translations/calls", {
     method: "POST",
@@ -141,14 +191,18 @@ export const startTranslationSession = async (
     type: "answer",
     sdp: await sdpResponse.text()
   });
+  onDiagnostic?.("OpenAI WebRTC answer 수신됨");
 
   const stop = () => {
+    isStopped = true;
+    audioContext.close().catch(() => undefined);
     events.close();
     peerConnection.getSenders().forEach((sender) => sender.track?.stop());
     sourceStream.getTracks().forEach((track) => track.stop());
     peerConnection.close();
     audioElement.pause();
     audioElement.srcObject = null;
+    audioElement.remove();
   };
 
   return { peerConnection, sourceStream, audioElement, stop };
