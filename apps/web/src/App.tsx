@@ -296,9 +296,9 @@ export function App() {
                 ))}
               </select>
             </label>
-            {supportsOutputSelection ? (
-              <label>
-                <span>출력 장치</span>
+            <div className="output-setting">
+              <span>출력 장치</span>
+              {supportsOutputSelection ? (
                 <select value={outputDeviceId} onChange={(event) => setOutputDeviceId(event.target.value)} onFocus={refreshDevices}>
                   <option value="">브라우저 기본 출력</option>
                   {outputDevices.map((device, index) => (
@@ -307,8 +307,10 @@ export function App() {
                     </option>
                   ))}
                 </select>
-              </label>
-            ) : null}
+              ) : (
+                <p>이 브라우저는 앱 안에서 스피커 선택을 지원하지 않습니다. 태블릿/Windows 기본 출력 장치를 블루투스 이어폰으로 바꿔주세요.</p>
+              )}
+            </div>
             <div className="device-actions">
               {supportsOutputPicker ? (
                 <button className="secondary-button" type="button" onClick={chooseOutputDevice}>

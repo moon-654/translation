@@ -215,17 +215,20 @@ button {
   font-weight: 800;
 }
 
-.setup-panel label {
+.setup-panel label,
+.output-setting {
   display: grid;
   gap: 7px;
 }
 
-.setup-panel span {
+.setup-panel span,
+.output-setting span {
   font-size: 14px;
 }
 
 .setup-panel input,
-.setup-panel select {
+.setup-panel select,
+.output-setting select {
   min-height: 48px;
   width: 100%;
   border: 1px solid rgba(23, 33, 27, 0.18);
@@ -234,6 +237,21 @@ button {
   color: #17211b;
   background: #ffffff;
   font-size: 16px;
+  font-weight: 700;
+}
+
+.output-setting p {
+  margin: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #59675f;
+  background: #ffffff;
+  border: 1px solid rgba(23, 33, 27, 0.12);
+  font-size: 14px;
+  line-height: 1.35;
   font-weight: 700;
 }
 
