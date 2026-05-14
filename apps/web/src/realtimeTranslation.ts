@@ -46,18 +46,59 @@ const getClientSecret = async (accessCode: string) => {
   return clientSecret;
 };
 
+const ensureMicrophoneAvailable = async () => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("이 브라우저에서 마이크를 사용할 수 없습니다. Chrome 또는 Edge 최신 버전에서 다시 시도하세요.");
+  }
+
+  const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+  const hasAudioInput = devices.some((device) => device.kind === "audioinput");
+
+  if (devices.length > 0 && !hasAudioInput) {
+    throw new Error("마이크 입력 장치를 찾지 못했습니다. 태블릿/PC 마이크를 켜거나 USB/블루투스 마이크를 연결하세요.");
+  }
+};
+
+const explainMicrophoneError = (error: unknown) => {
+  if (!(error instanceof DOMException)) {
+    return error instanceof Error ? error.message : "마이크를 시작하지 못했습니다.";
+  }
+
+  if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+    return "마이크 입력 장치를 찾지 못했습니다. Windows 설정과 Chrome/Edge 사이트 권한에서 마이크가 사용 가능한지 확인하세요.";
+  }
+
+  if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+    return "마이크 권한이 차단되었습니다. 주소창 왼쪽의 사이트 설정에서 마이크 권한을 허용하세요.";
+  }
+
+  if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+    return "다른 앱이 마이크를 사용 중일 수 있습니다. Zoom, Teams, 녹음 앱을 닫고 다시 시도하세요.";
+  }
+
+  return error.message || "마이크를 시작하지 못했습니다.";
+};
+
 export const startTranslationSession = async (
   accessCode: string,
   onEvent: (event: TranslationEvent) => void
 ): Promise<TranslationSession> => {
   const clientSecret = await getClientSecret(accessCode);
-  const sourceStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true
-    }
-  });
+  await ensureMicrophoneAvailable();
+
+  let sourceStream: MediaStream;
+
+  try {
+    sourceStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
+  } catch (error) {
+    throw new Error(explainMicrophoneError(error));
+  }
 
   const peerConnection = new RTCPeerConnection();
   const sourceTrack = sourceStream.getAudioTracks()[0];
