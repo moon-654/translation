@@ -4,6 +4,10 @@ import { startTranslationSession, type TranslationEvent, type TranslationSession
 
 type Status = "idle" | "connecting" | "active" | "error" | "stopped";
 
+type MediaDevicesWithOutputPicker = MediaDevices & {
+  selectAudioOutput?: (options?: { deviceId?: string }) => Promise<MediaDeviceInfo>;
+};
+
 const statusText: Record<Status, string> = {
   idle: "대기 중",
   connecting: "연결 중",
@@ -100,6 +104,57 @@ export function App() {
     setDiagnostic("진단 정보 복사됨");
   };
 
+  const chooseOutputDevice = async () => {
+    const mediaDevices = navigator.mediaDevices as MediaDevicesWithOutputPicker | undefined;
+
+    if (!mediaDevices?.selectAudioOutput) {
+      setDiagnostic("이 브라우저는 출력 장치 선택 팝업을 지원하지 않습니다. OS 기본 출력 장치를 이어폰으로 바꿔주세요.");
+      return;
+    }
+
+    try {
+      const device = await mediaDevices.selectAudioOutput(outputDeviceId ? { deviceId: outputDeviceId } : undefined);
+      setOutputDeviceId(device.deviceId);
+      localStorage.setItem("translation_output_device_id", device.deviceId);
+      await refreshDevices();
+      setDiagnostic(`${device.label || "선택한 출력 장치"}로 출력합니다.`);
+    } catch {
+      setDiagnostic("출력 장치 선택이 취소되었습니다.");
+    }
+  };
+
+  const playOutputTest = async () => {
+    const audioContext = new AudioContext();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const destination = audioContext.createMediaStreamDestination();
+    const audio = new Audio();
+
+    audio.autoplay = true;
+    audio.srcObject = destination.stream;
+    audio.setAttribute("playsinline", "true");
+    audio.style.display = "none";
+
+    if (outputDeviceId && "setSinkId" in audio) {
+      await (audio as HTMLAudioElement & { setSinkId: (sinkId: string) => Promise<void> }).setSinkId(outputDeviceId);
+    }
+
+    document.body.appendChild(audio);
+    oscillator.frequency.value = 740;
+    gain.gain.value = 0.08;
+    oscillator.connect(gain);
+    gain.connect(destination);
+    oscillator.start();
+    await audio.play();
+
+    window.setTimeout(() => {
+      oscillator.stop();
+      audio.pause();
+      audio.remove();
+      audioContext.close().catch(() => undefined);
+    }, 420);
+  };
+
   const start = async () => {
     if (!accessCode.trim()) {
       setStatus("error");
@@ -160,6 +215,8 @@ export function App() {
   const canStart = status === "idle" || status === "stopped" || status === "error";
   const isActive = status === "active" || status === "connecting";
   const supportsOutputSelection = typeof HTMLMediaElement !== "undefined" && "setSinkId" in HTMLMediaElement.prototype;
+  const supportsOutputPicker =
+    typeof navigator !== "undefined" && Boolean((navigator.mediaDevices as MediaDevicesWithOutputPicker | undefined)?.selectAudioOutput);
 
   return (
     <main className="app-shell">
@@ -252,9 +309,19 @@ export function App() {
                 </select>
               </label>
             ) : null}
-            <button className="secondary-button refresh-devices" type="button" onClick={refreshDevices}>
-              장치 새로고침
-            </button>
+            <div className="device-actions">
+              {supportsOutputPicker ? (
+                <button className="secondary-button" type="button" onClick={chooseOutputDevice}>
+                  출력 선택
+                </button>
+              ) : null}
+              <button className="secondary-button" type="button" onClick={playOutputTest}>
+                테스트 소리
+              </button>
+              <button className="secondary-button" type="button" onClick={refreshDevices}>
+                장치 새로고침
+              </button>
+            </div>
           </section>
         ) : null}
 

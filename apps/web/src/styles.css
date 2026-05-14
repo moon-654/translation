@@ -206,7 +206,7 @@ button {
 
 .setup-panel {
   display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) minmax(160px, auto);
   gap: 14px;
   align-items: end;
   background: #f7f9f4;
@@ -237,8 +237,16 @@ button {
   font-weight: 700;
 }
 
-.refresh-devices {
-  min-width: 138px;
+.device-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.device-actions .secondary-button {
+  min-height: 48px;
+  padding: 0 14px;
+  font-size: 15px;
 }
 
 .controls {
