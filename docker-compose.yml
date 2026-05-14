@@ -1,0 +1,31 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: 8787
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_REALTIME_TRANSLATION_MODEL: ${OPENAI_REALTIME_TRANSLATION_MODEL:-gpt-realtime-translate}
+      SOURCE_LANGUAGE: ${SOURCE_LANGUAGE:-ja}
+      TARGET_LANGUAGE: ${TARGET_LANGUAGE:-ko}
+      SESSION_MAX_MINUTES: ${SESSION_MAX_MINUTES:-60}
+    ports:
+      - "8787:8787"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8787}
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
