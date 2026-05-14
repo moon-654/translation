@@ -88,8 +88,6 @@ export const onRequestPost = async ({ request, env }: PagesContext) => {
   const sourceLanguage = env.SOURCE_LANGUAGE ?? "ja";
   const targetLanguage = env.TARGET_LANGUAGE ?? "ko";
   const realtimeModel = env.OPENAI_REALTIME_TRANSLATION_MODEL ?? "gpt-realtime-translate";
-  const sessionMaxMinutes = Number(env.SESSION_MAX_MINUTES ?? "60");
-
   const body = await request.json().catch(() => ({}));
 
   if (
@@ -117,10 +115,6 @@ export const onRequestPost = async ({ request, env }: PagesContext) => {
     body: JSON.stringify({
       session: {
         model: realtimeModel,
-        expires_after: {
-          anchor: "created_at",
-          seconds: Math.max(60, Math.min(sessionMaxMinutes * 60, 3600))
-        },
         audio: {
           output: {
             language: targetLanguage
