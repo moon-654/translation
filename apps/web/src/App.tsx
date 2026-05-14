@@ -1,5 +1,5 @@
 import { Mic, MicOff, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { startTranslationSession, type TranslationEvent, type TranslationSession } from "./realtimeTranslation";
 
 type Status = "idle" | "connecting" | "active" | "error" | "stopped";
@@ -24,9 +24,36 @@ export function App() {
   const [micLevel, setMicLevel] = useState(0);
   const [diagnostic, setDiagnostic] = useState("대기 중");
   const [lastEventType, setLastEventType] = useState("");
+  const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [inputDeviceId, setInputDeviceId] = useState(() => localStorage.getItem("translation_input_device_id") ?? "");
+  const [outputDeviceId, setOutputDeviceId] = useState(() => localStorage.getItem("translation_output_device_id") ?? "");
+  const [eventLog, setEventLog] = useState<string[]>([]);
+
+  const refreshDevices = async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setInputDevices(devices.filter((device) => device.kind === "audioinput"));
+      setOutputDevices(devices.filter((device) => device.kind === "audiooutput"));
+    } catch {
+      setDiagnostic("장치 목록을 불러오지 못했습니다.");
+    }
+  };
+
+  useEffect(() => {
+    refreshDevices();
+    navigator.mediaDevices?.addEventListener?.("devicechange", refreshDevices);
+
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.("devicechange", refreshDevices);
+    };
+  }, []);
 
   const handleEvent = (event: TranslationEvent) => {
     setLastEventType(event.type);
+    setEventLog((current) => [event.type, ...current.filter((type) => type !== event.type)].slice(0, 6));
 
     const payload = event as Record<string, unknown>;
     const delta =
@@ -34,13 +61,21 @@ export function App() {
         ? payload.delta
         : typeof payload.transcript === "string"
           ? payload.transcript
+          : typeof payload.text === "string"
+            ? payload.text
           : "";
 
     if (!delta) return;
 
     const eventType = event.type.toLowerCase();
 
-    if (eventType.includes("output") || eventType.includes("translation") || eventType.includes("response")) {
+    if (
+      eventType.includes("output") ||
+      eventType.includes("translation") ||
+      eventType.includes("translated") ||
+      eventType.includes("target") ||
+      eventType.includes("response")
+    ) {
       setTargetTranscript((current) => `${current}${delta}`);
     }
 
@@ -61,12 +96,17 @@ export function App() {
     setTargetTranscript("");
     setSourceTranscript("");
     setLastEventType("");
+    setEventLog([]);
     setMicLevel(0);
     setDiagnostic("연결 준비 중");
 
     try {
       sessionStorage.setItem("translation_access_code", accessCode.trim());
+      localStorage.setItem("translation_input_device_id", inputDeviceId);
+      localStorage.setItem("translation_output_device_id", outputDeviceId);
       const session = await startTranslationSession(accessCode.trim(), {
+        inputDeviceId,
+        outputDeviceId,
         onEvent: handleEvent,
         onDiagnostic: setDiagnostic,
         onMicLevel: setMicLevel
@@ -102,6 +142,7 @@ export function App() {
 
   const canStart = status === "idle" || status === "stopped" || status === "error";
   const isActive = status === "active" || status === "connecting";
+  const supportsOutputSelection = typeof HTMLMediaElement !== "undefined" && "setSinkId" in HTMLMediaElement.prototype;
 
   return (
     <main className="app-shell">
@@ -134,6 +175,7 @@ export function App() {
             </div>
             <p>{diagnostic}</p>
             <p>{lastEventType ? `최근 이벤트: ${lastEventType}` : "이벤트 대기 중"}</p>
+            {eventLog.length > 0 ? <p>이벤트 로그: {eventLog.join(" / ")}</p> : null}
           </section>
         ) : null}
 
@@ -151,16 +193,45 @@ export function App() {
         ) : null}
 
         {canStart ? (
-          <label className="access-code">
-            <span>접속 코드</span>
-            <input
-              type="password"
-              value={accessCode}
-              onChange={(event) => setAccessCode(event.target.value)}
-              placeholder="회사 내부 접속 코드"
-              autoComplete="current-password"
-            />
-          </label>
+          <section className="setup-panel" aria-label="통역 시작 설정">
+            <label>
+              <span>접속 코드</span>
+              <input
+                type="password"
+                value={accessCode}
+                onChange={(event) => setAccessCode(event.target.value)}
+                placeholder="회사 내부 접속 코드"
+                autoComplete="current-password"
+              />
+            </label>
+            <label>
+              <span>입력 마이크</span>
+              <select value={inputDeviceId} onChange={(event) => setInputDeviceId(event.target.value)} onFocus={refreshDevices}>
+                <option value="">브라우저 기본 마이크</option>
+                {inputDevices.map((device, index) => (
+                  <option key={device.deviceId || index} value={device.deviceId}>
+                    {device.label || `마이크 ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {supportsOutputSelection ? (
+              <label>
+                <span>출력 장치</span>
+                <select value={outputDeviceId} onChange={(event) => setOutputDeviceId(event.target.value)} onFocus={refreshDevices}>
+                  <option value="">브라우저 기본 출력</option>
+                  {outputDevices.map((device, index) => (
+                    <option key={device.deviceId || index} value={device.deviceId}>
+                      {device.label || `출력 ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <button className="secondary-button refresh-devices" type="button" onClick={refreshDevices}>
+              장치 새로고침
+            </button>
+          </section>
         ) : null}
 
         <footer className="controls">

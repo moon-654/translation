@@ -11,6 +11,8 @@ export type TranslationSession = {
 };
 
 type TranslationSessionCallbacks = {
+  inputDeviceId?: string;
+  outputDeviceId?: string;
   onEvent: (event: TranslationEvent) => void;
   onDiagnostic?: (message: string) => void;
   onMicLevel?: (level: number) => void;
@@ -87,7 +89,7 @@ const explainMicrophoneError = (error: unknown) => {
 
 export const startTranslationSession = async (
   accessCode: string,
-  { onEvent, onDiagnostic, onMicLevel }: TranslationSessionCallbacks
+  { inputDeviceId, outputDeviceId, onEvent, onDiagnostic, onMicLevel }: TranslationSessionCallbacks
 ): Promise<TranslationSession> => {
   onDiagnostic?.("통역 세션 생성 중");
   const clientSecret = await getClientSecret(accessCode);
@@ -98,11 +100,18 @@ export const startTranslationSession = async (
 
   try {
     sourceStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }
+      audio: inputDeviceId
+        ? {
+            deviceId: { exact: inputDeviceId },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        : {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
     });
   } catch (error) {
     throw new Error(explainMicrophoneError(error));
@@ -149,6 +158,14 @@ export const startTranslationSession = async (
   audioElement.autoplay = true;
   audioElement.setAttribute("playsinline", "true");
   audioElement.style.display = "none";
+
+  if (outputDeviceId && "setSinkId" in audioElement) {
+    await (audioElement as HTMLAudioElement & { setSinkId: (sinkId: string) => Promise<void> })
+      .setSinkId(outputDeviceId)
+      .then(() => onDiagnostic?.("출력 장치 연결됨"))
+      .catch(() => onDiagnostic?.("선택한 출력 장치를 사용할 수 없어 기본 출력으로 재생합니다."));
+  }
+
   document.body.appendChild(audioElement);
 
   peerConnection.ontrack = ({ streams }) => {
